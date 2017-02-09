@@ -2,7 +2,7 @@
 #include "json.hpp"
 #include <cstring>
 #include <iostream>
-#include <deque>
+#include <vector>
 #include <string>
 
 #include "json.hpp"
@@ -11,8 +11,8 @@ using json = nlohmann::json;
 using namespace std;
 
 static const char *s_http_port = "8000";
-bool hasPopped;
-deque<string> songQueue;
+vector<string> songQueue;
+unsigned int currentTrack;
 
 static void ev_handler(struct mg_connection *c, int ev, void *p) {
     if (ev == MG_EV_HTTP_REQUEST) {
@@ -28,7 +28,7 @@ static void ev_handler(struct mg_connection *c, int ev, void *p) {
         }
 
         // -------------------- /add/<track_id> -------------------- //
-        if(mg_vcmp(&hm->method, "GET") == 0){
+        if(mg_vcmp(&hm->method, "POST") == 0){
             if(mg_strncmp(hm->uri, mg_mk_str("/add/"), 5) == 0) {
                 // BEGIN SHANE CODE
                 const char * fuckery = hm->uri.p + 5;
@@ -47,14 +47,35 @@ static void ev_handler(struct mg_connection *c, int ev, void *p) {
         // -------------------- /pop -------------------- //
         if(mg_vcmp(&hm->method, "POST") == 0){
             if(mg_vcmp(&hm->uri, "/pop") == 0){
-                if(songQueue.size() != 0){
-                    if(hasPopped) songQueue.pop_front();
-                    else hasPopped = true;
+                cout << "Received pop request.\nCurrent track number: " << currentTrack << endl;
+                if(currentTrack + 1 < songQueue.size()){
+                    currentTrack++;
+                    cout << "New track number: " << currentTrack << endl;
                     mg_send_head(c, 200, -1, "");
-                    mg_send_http_chunk(c, songQueue.front().c_str(), songQueue.front().length());
-                    mg_send_http_chunk(c, "", 0); // Tell the client we're finished                
+                    mg_send_http_chunk(c, songQueue[currentTrack].c_str(), songQueue[currentTrack].length());
+                    mg_send_http_chunk(c, "", 0); // Tell the client we're finished    
                 }
                 else{
+                    cout << "New track number: " << currentTrack << endl;
+                    mg_send_head(c, 200, -1, "");
+                    mg_send_http_chunk(c, "", 0); // Tell the client we're finished
+                }
+            }
+        }
+
+        // -------------------- /rewind -------------------- //
+        if(mg_vcmp(&hm->method, "POST") == 0){
+            if(mg_vcmp(&hm->uri, "/rewind") == 0){
+                cout << "Received rewind request.\nCurrent track number: " << currentTrack << endl;
+                if(currentTrack > 0){
+                    currentTrack--;
+                    cout << "New track number: " << currentTrack << endl;
+                    mg_send_head(c, 200, -1, "");
+                    mg_send_http_chunk(c, songQueue[currentTrack].c_str(), songQueue[currentTrack].length());
+                    mg_send_http_chunk(c, "", 0); // Tell the client we're finished    
+                }
+                else{
+                    cout << "New track number: " << currentTrack << endl;
                     mg_send_head(c, 200, -1, "");
                     mg_send_http_chunk(c, "", 0); // Tell the client we're finished
                 }
@@ -77,7 +98,7 @@ static void ev_handler(struct mg_connection *c, int ev, void *p) {
 int main(void){
     struct mg_mgr mgr;
     struct mg_connection *c;
-    hasPopped = false;
+    currentTrack = -1;
 
     mg_mgr_init(&mgr, NULL);
     c = mg_bind(&mgr, s_http_port, ev_handler);
